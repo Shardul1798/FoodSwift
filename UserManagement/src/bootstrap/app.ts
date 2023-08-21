@@ -1,8 +1,21 @@
 import cors from "cors";
 import express, { Express } from "express";
 import { appRoutes } from "../routes/routes";
+import { createClient } from "redis";
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+import User from "../database/models/user.model";
+import Session from "../database/models/session.model";
 
+dotenv.config();
+let connectionData: any = {
+  port: process.env.REDIS_PORT,
+  host: "myRedis",
+  index: 0,
+  password: "myPassword",
+};
 export class UserApp {
+  public client = createClient(connectionData);
   private app: Express;
   private port: number = 3000;
   contextPath: string = "/api";
@@ -16,6 +29,8 @@ export class UserApp {
     this.loadGlobalMiddlewares();
     this.loadRoutes();
     this.initializeServer();
+    this.connectRedis();
+    this.connectToMongoDB();
   }
 
   private loadGlobalMiddlewares() {
@@ -34,4 +49,22 @@ export class UserApp {
   private callback = () => {
     // logger.info(`Server listing on port: ${this.port}`);
   };
+
+  private async connectRedis() {
+    this.client.on("error", (err) => console.log("Redis Client Error", err));
+    await this.client.connect();
+    console.log("REDIS CONNECTED");
+  }
+
+  private async connectToMongoDB() {
+    try {
+      await mongoose.connect('mongodb://localhost:27017/food_swift', {
+      });
+      User.createCollection();
+      Session.createCollection();
+      console.log('MongoDB connected');
+    } catch (error) {
+      console.error('MongoDB connection error:', error);
+    }
+  }
 }

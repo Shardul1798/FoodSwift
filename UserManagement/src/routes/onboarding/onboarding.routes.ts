@@ -1,4 +1,7 @@
 import { Router } from "express";
+import { basicAuth } from "../../middlewares/authorization/basic-auth";
+import { bodyValidator } from "../../middlewares/validation/body-validator";
+import { onboardingController } from "../../controllers/onboarding/onboarding.controller";
 
 class OnboardingRoutes {
     private route: Router;
@@ -8,8 +11,8 @@ class OnboardingRoutes {
     }
 
     loadAllRoutes() {
-        this.route.post('/signin');
-        this.route.post('/signup');
+        this.route.post('/signin', basicAuth.handleBasicAuth,bodyValidator.validateLoginBody, onboardingController.LoginHandler);
+        this.route.post('/signup', basicAuth.handleBasicAuth,bodyValidator.validateRegisterBody, onboardingController.SignupHandler);
         this.route.post('/forgot-password');
         this.route.patch('/reset-password');
         this.route.post('/verify-otp');
