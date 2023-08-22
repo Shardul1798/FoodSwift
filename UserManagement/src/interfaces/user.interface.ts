@@ -7,7 +7,8 @@ export interface IUserLogin {
 
 export interface IUserSignup {
   username: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: number;
   country_code: string;

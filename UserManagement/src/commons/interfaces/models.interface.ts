@@ -4,7 +4,8 @@ import { USER_ROLES } from "../constants";
 export interface IUser {
   _id: Schema.Types.ObjectId;
   username: string;
-  name: string;
+  firstName: string;
+  lastName: string,
   email: string;
   phone: number;
   country_code: string;

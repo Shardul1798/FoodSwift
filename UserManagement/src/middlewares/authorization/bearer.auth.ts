@@ -21,6 +21,7 @@ class BearerAuth {
       if (!verifyToken) {
         return res.status(403).json({ message: "Session Expired!" });
       }
+      req.body.currentUserId = verifyToken.id;
       const checkRedisSession = await redisStorage.getKeyFromRedis(
         `${verifyToken.id}_${verifyToken.sessionId}`
       );
@@ -39,16 +40,24 @@ class BearerAuth {
     } catch (error) {}
   }
 
-  generateAuthToken = async (userId: any, sessionId: any) => {
+  generateAuthToken = async (userId: any, sessionId?: any) => {
     if (!userId) {
       return Promise.reject("Tokenization Error");
     } else {
       try {
-        const token = await jwt.sign(
-          { id: userId, sessionId: sessionId },
-          this.secret_key,
-          { expiresIn: "24h" }
-        );
+        let token;
+        if (sessionId) {
+          token = await jwt.sign(
+            { id: userId, sessionId: sessionId },
+            this.secret_key,
+            { expiresIn: "24h" }
+          );
+        } else {
+          //For reset password
+          token = await jwt.sign({ id: userId }, this.secret_key, {
+            expiresIn: 15 * 60,
+          });
+        }
         return { accessToken: token };
       } catch (error) {
         console.log(error);

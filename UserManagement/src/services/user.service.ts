@@ -14,6 +14,10 @@ class UserService {
     async findUserById(id:Schema.Types.ObjectId) {
         return await User.findById(id);
     }
+
+    async findAndUpdateUser(filter:any, update:any) {
+        return await User.updateOne(filter,update);
+    }
 }
 
 export const userService = new UserService();

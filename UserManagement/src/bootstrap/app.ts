@@ -12,10 +12,10 @@ let connectionData: any = {
   port: process.env.REDIS_PORT,
   host: "myRedis",
   index: 0,
-  password: "myPassword",
+  password: "mypassword",
 };
 export class UserApp {
-  public client = createClient(connectionData);
+  public static client = createClient(connectionData);
   private app: Express;
   private port: number = 3000;
   contextPath: string = "/api";
@@ -51,8 +51,8 @@ export class UserApp {
   };
 
   private async connectRedis() {
-    this.client.on("error", (err) => console.log("Redis Client Error", err));
-    await this.client.connect();
+    UserApp.client.on("error", (err) => console.log("Redis Client Error", err));
+    await UserApp.client.connect();
     console.log("REDIS CONNECTED");
   }
 

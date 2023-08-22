@@ -6,6 +6,7 @@ import Session from "../../database/models/session.model";
 import { USER_STATUS } from "../../commons/constants";
 import { bearerAuthClass } from "../../middlewares/authorization/bearer.auth";
 import { redisStorage } from "../../services/redis.service";
+import { mailerConf, transporter } from "../../utils/nodemailer.utils";
 
 class OnboardingController {
   async LoginHandler(req: Request, res: Response) {
@@ -26,43 +27,50 @@ class OnboardingController {
         payload.password,
         result.password
       );
-      if (matchPassword) {
-        const expiryTime = Date.now() + 60 * 60 * 24;
-        const sessionCreate: any = await Session.create({
-          userId: result.id,
-          expiresIn: expiryTime.toString(),
-          deviceType: req.body.deviceType,
-          status: USER_STATUS.ACTIVE,
-        });
-        console.log(sessionCreate);
-
-        const resp: any = await bearerAuthClass.generateAuthToken(
-          result.id,
-          sessionCreate.id
-        );
-        const key = `${result.id}_${sessionCreate.id}}`;
-        const value = {
-          userId: result.id,
-          expiryTime: expiryTime,
-          status: USER_STATUS.ACTIVE,
-          sessionId: sessionCreate._id,
-        };
-        const createRedisSession = await redisStorage.insertKeyInRedis(
-          key,
-          value
-        );
-        if (!createRedisSession) {
-          return res.status(203).json({ message: "Something went wrong!" });
-        }
+      if (!matchPassword) {
+        return res.status(404).json({message: "Invalid Password"});
       }
+      const expiryTime = Date.now() + 60 * 60 * 24;
+      const sessionCreate: any = await Session.create({
+        userId: result.id,
+        expiresIn: expiryTime.toString(),
+        deviceType: req.body.deviceType,
+        status: USER_STATUS.ACTIVE,
+      });
+      console.log(sessionCreate);
+
+      const resp: any = await bearerAuthClass.generateAuthToken(
+        result.id,
+        sessionCreate.id
+      );
+      const key = `${result.id}_${sessionCreate.id}}`;
+      const value = {
+        userId: result.id,
+        expiryTime: expiryTime,
+        status: USER_STATUS.ACTIVE,
+        sessionId: sessionCreate._id,
+      };
+      const createRedisSession = await redisStorage.insertKeyInRedis(
+        key,
+        value
+      );
+      if (!createRedisSession) {
+        return res.status(203).json({ message: "Something went wrong!" });
+      }
+      return res
+        .status(200)
+        .json({ message: "Login Successfull", data: resp });
     } catch (error) {
+      console.error(error);
+      
       return res.status(500).json({ message: "Internal Server Error!" });
     }
   }
 
   async SignupHandler(req: Request, res: Response) {
     try {
-      const payload = req.body;
+      let payload = req.body;
+      payload.password = await bcrypt.hash(payload.password, 10);
       const findEmail = await userService.findSingleUser({
         email: payload.email,
       });
@@ -87,6 +95,74 @@ class OnboardingController {
           .json({ message: "Something went wrong! Please try later" });
       }
       return res.status(200).json({ message: "Signup successfully!" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal Server Error!" });
+    }
+  }
+
+  async forgotPasswordHandler(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+
+      const findUser = await userService.findSingleUser({ email: email });
+      if (!findUser) {
+        return res.status(404).json({ message: "User not found!" });
+      }
+      const OTP = Math.floor(1000 + Math.random() * 9000);
+      if (OTP && findUser._id) {
+        const key = findUser._id + "_otp";
+        const value = OTP.toString();
+        const result = await redisStorage.insertKeyInRedis(key, value);
+        const resp: any = await bearerAuthClass.generateAuthToken(findUser._id);
+        console.log(resp);
+        if (result) {
+          let user = {
+            email: findUser.email,
+            username: findUser.firstName,
+            OTP: OTP,
+            token: resp.accessToken,
+          };
+          const configureMail = mailerConf.setMailOptions(user);
+          transporter.sendMail(configureMail, (error, info) => {
+            if (error) {
+              console.error("Error sending email:", error);
+              return res.status(200).json({ message: "Error sending email!" });
+            } else {
+              console.log("Email sent:", info.response);
+              return res.status(200).json({
+                message: "Email to reset password sent successfully.",
+              });
+            }
+          });
+        }
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Internal Server Error!" });
+    }
+  }
+
+  async resetPasswordHandler(req: Request, res: Response) {
+    try {
+      const { otp, password, currentUserId } = req.body;
+      const result = await redisStorage.getKeyFromRedis(`${currentUserId}_otp`);
+      if (!result) {
+        return res.status(404).json({ message: "Session Expired!" });
+      }
+      if (result && result.otp == otp) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const filter = { _id: currentUserId };
+        const update = { password: hashedPassword };
+        const changePassword: any = await userService.findAndUpdateUser(
+          filter,
+          update
+        );
+        if (!changePassword) {
+          return res.status(203).json({ message: "Something went wrong!" });
+        }
+        return res
+          .status(200)
+          .json({ mesage: "Password Changed Successfully!" });
+      }
     } catch (error) {
       return res.status(500).json({ message: "Internal Server Error!" });
     }
