@@ -8,6 +8,8 @@ class RequestBodyValidator {
       const schema = Joi.object().keys({
         username: Joi.string().required(),
         password: Joi.string().required(),
+        deviceType: Joi.string().required(),
+        deviceId: Joi.string().required()
       });
       const result: any = schema.validate(req.body);
       if (result && result.error) {
@@ -88,7 +90,8 @@ class RequestBodyValidator {
     try {
       const schema = Joi.object().keys({
         otp: Joi.string().required().min(4),
-        password: Joi.string().required()
+        password: Joi.string().required(),
+        userId: Joi.string().required()
       });
       const result:any = schema.validate(req.body);
       if (result && result.error) {

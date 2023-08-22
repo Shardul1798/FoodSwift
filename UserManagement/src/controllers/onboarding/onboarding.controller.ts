@@ -7,8 +7,11 @@ import { USER_STATUS } from "../../commons/constants";
 import { bearerAuthClass } from "../../middlewares/authorization/bearer.auth";
 import { redisStorage } from "../../services/redis.service";
 import { mailerConf, transporter } from "../../utils/nodemailer.utils";
+import dotenv from "dotenv";
 
+dotenv.config();
 class OnboardingController {
+  private passwordSalt = process.env.SALT || 10;
   async LoginHandler(req: Request, res: Response) {
     try {
       const payload: IUserLogin = {
@@ -35,10 +38,9 @@ class OnboardingController {
         userId: result.id,
         expiresIn: expiryTime.toString(),
         deviceType: req.body.deviceType,
+        deviceId: req.body.deviceId,
         status: USER_STATUS.ACTIVE,
       });
-      console.log(sessionCreate);
-
       const resp: any = await bearerAuthClass.generateAuthToken(
         result.id,
         sessionCreate.id
@@ -70,7 +72,7 @@ class OnboardingController {
   async SignupHandler(req: Request, res: Response) {
     try {
       let payload = req.body;
-      payload.password = await bcrypt.hash(payload.password, 10);
+      payload.password = await bcrypt.hash(payload.password, this.passwordSalt);
       const findEmail = await userService.findSingleUser({
         email: payload.email,
       });
@@ -143,14 +145,14 @@ class OnboardingController {
 
   async resetPasswordHandler(req: Request, res: Response) {
     try {
-      const { otp, password, currentUserId } = req.body;
-      const result = await redisStorage.getKeyFromRedis(`${currentUserId}_otp`);
+      const { otp, password, userId } = req.body;
+      const result = await redisStorage.getKeyFromRedis(`${userId}_otp`);
       if (!result) {
         return res.status(404).json({ message: "Session Expired!" });
       }
-      if (result && result.otp == otp) {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const filter = { _id: currentUserId };
+      if (result && result == otp) {
+        const hashedPassword = await bcrypt.hash(password, this.passwordSalt);
+        const filter = { _id: userId };
         const update = { password: hashedPassword };
         const changePassword: any = await userService.findAndUpdateUser(
           filter,
@@ -159,11 +161,16 @@ class OnboardingController {
         if (!changePassword) {
           return res.status(203).json({ message: "Something went wrong!" });
         }
-        return res
-          .status(200)
-          .json({ mesage: "Password Changed Successfully!" });
+        const resp = await redisStorage.deleteKeyFromRedis(`${userId}_otp`);
+        if(resp) {
+          return res
+            .status(200)
+            .json({ mesage: "Password Changed Successfully!" });
+        }
+        return res.status(500).json({message: "Failed to delete key from REDIS"});
       }
     } catch (error) {
+      console.log(error);
       return res.status(500).json({ message: "Internal Server Error!" });
     }
   }

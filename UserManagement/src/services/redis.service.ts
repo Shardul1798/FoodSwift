@@ -4,7 +4,6 @@ class RedisStorage {
   async insertKeyInRedis(key: string, value: any) {
     try {
       if (!key || !value) return {};
-      console.log(key, value);
       value = JSON.stringify(value);
       const result = await UserApp.client.set(key, value);
       return result;
